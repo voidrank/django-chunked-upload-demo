@@ -27,10 +27,10 @@ TEMPLATE_DEBUG = DEBUG
 # Application definition
 
 INSTALLED_APPS = (
-    # 'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
+    'django.contrib.admin',
     # 'django.contrib.messages',
     # 'django.contrib.staticfiles',
     'chunked_upload',
@@ -90,4 +90,5 @@ TEMPLATE_DIRS = (
 
 TEMPLATE_CONTEXT_PROCESSORS = (
     'django.core.context_processors.static',
+    'django.contrib.auth.context_processors.auth',
 )
