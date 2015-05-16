@@ -13,33 +13,56 @@
   <script src="/static/js/jquery.iframe-transport.js"></script>
   <!-- The basic File Upload plugin -->
   <script src="/static/js/jquery.fileupload.js"></script>
-  <!-- Calculate md5 -->
-  <script src="/static/js/spark-md5.js"></script>
+  <!-- md5 -->
+  <script src="/static/js/crypto/md5.js"></script>
+  <!-- sha1 -->
+  <script src="/static/js/crypto/sha1.js"></script>
+  <!-- sha224 -->
+  <script src="/static/js/crypto/sha224.js"></script>
+  <!-- sha256 -->
+  <script src="/static/js/crypto/sha256.js"></script>
+  <!-- sha384 -->
+  <script src="/static/js/crypto/sha384.js"></script>
+  <!-- sha512 -->
+  <script src="/static/js/crypto/sha512.js"></script>
+  <!-- array buffer support -->
+  <script src='/static/js/crypto/lib-typedarrays-min.js'></script>
+
 </head>
 <body>
 
   {% csrf_token %}
   <input id="chunked_upload" type="file" name="the_file">
+  <select id="checksum_alg">
+    <option value="md5">md5</option>
+    <option value="sha1">sha1</option>
+    <option value="sha224">sha224</option>
+    <option value="sha256">sha256</option>
+    <option value="sha384">sha384</option>
+    <option value="sha512">sha512</option>
+  </select>
 
   <p id="progress"></p>
   <div id="messages"></div>
 
   <script type="text/javascript">
-    var md5 = "",
+
+    var checksum = "",
         csrf = $("input[name='csrfmiddlewaretoken']")[0].value,
         form_data = [{"name": "csrfmiddlewaretoken", "value": csrf}];
-    function calculate_md5(file, chunk_size) {
+
+    function calculate_checksum(file, checksum_alg, chunk_size) {
       var slice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,
           chunks = chunks = Math.ceil(file.size / chunk_size),
           current_chunk = 0,
-          spark = new SparkMD5.ArrayBuffer();
+          checksum_obj = checksum_alg.create();
       function onload(e) {
-        spark.append(e.target.result);  // append chunk
+        checksum_obj.update(CryptoJS.lib.WordArray.create(e.target.result));  // append chunk
         current_chunk++;
         if (current_chunk < chunks) {
           read_next_chunk();
         } else {
-          md5 = spark.end();
+          checksum = checksum_obj.finalize().toString();
         }
       };
       function read_next_chunk() {
@@ -51,6 +74,8 @@
       };
       read_next_chunk();
     }
+
+
     $("#chunked_upload").fileupload({
       url: "{% url 'api_chunked_upload' %}",
       dataType: "json",
@@ -61,7 +86,9 @@
         // If this is the second file you're uploading we need to remove the
         // old upload_id and just keep the csrftoken (which is always first).
         form_data.splice(1);
-        calculate_md5(data.files[0], 100000);  // Again, chunks of 100 kB
+        var checksum_alg = $('#checksum_alg').val();
+        checksum_alg = CryptoJS.algo[checksum_alg.toUpperCase()].create();
+        checksum = calculate_checksum(data.files[0], checksum_alg, 100000); // chunks of 100kb
         data.submit();
       },
       chunkdone: function (e, data) { // Called after uploading each chunk
@@ -75,14 +102,16 @@
         $("#progress").text(Array(progress).join("=") + "> " + progress + "%");
       },
       done: function (e, data) { // Called when the file has completely uploaded
+        var post_data = {
+          csrfmiddlewaretoken: csrf,
+          upload_id: data.result.upload_id,
+        };
+        var checksum_alg = $('#checksum_alg').val();
+        post_data[checksum_alg] = checksum;
         $.ajax({
           type: "POST",
           url: "{% url 'api_chunked_upload_complete' %}",
-          data: {
-            csrfmiddlewaretoken: csrf,
-            upload_id: data.result.upload_id,
-            md5: md5
-          },
+          data: post_data,
           dataType: "json",
           success: function(data) {
             $("#messages").append($('<p>').text(JSON.stringify(data)));
